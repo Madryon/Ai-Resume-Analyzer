@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResumePilot — AI Resume Analyzer</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="brand">ResumePilot</div>
+    <div class="subtitle">AI Resume Analyzer</div>
+  </div>
+  <div id="status" class="status offline"><span></span> Checking connection…</div>
+</header>
+
+<main class="layout">
+<section class="panel input-panel">
+  <div class="panel-head">
+    <div>
+      <h2>Your Resume</h2>
+      <p>Upload a file or paste your resume.</p>
+    </div>
+    <button id="clearBtn" class="ghost">Clear</button>
+  </div>
+
+  <div class="upload">
+    <input id="resumeFile" type="file" accept=".pdf,.docx,.txt">
+    <label for="resumeFile" class="upload-box">
+      <strong>Choose Resume File</strong>
+      <span>PDF, DOCX or TXT · max 5 MB</span>
+    </label>
+    <div id="fileName"></div>
+  </div>
+
+  <textarea id="resumeText" placeholder="Or paste your resume here..."></textarea>
+
+  <div class="job-head">
+    <h2>Job Description <span>(optional)</span></h2>
+    <p>Adding it makes keyword and job-match analysis much more useful.</p>
+  </div>
+  <textarea id="jobDescription" class="job" placeholder="Paste the job description here..."></textarea>
+
+  <div class="controls">
+    <label>Analysis
+      <select id="mode">
+        <option value="full">Complete Resume Review</option>
+        <option value="ats">ATS Compatibility</option>
+        <option value="keywords">Keyword Match</option>
+        <option value="jobmatch">Job Match</option>
+        <option value="improve">Improve Wording</option>
+        <option value="rewrite">Rewrite Resume</option>
+      </select>
+    </label>
+    <label>Style
+      <select id="level">
+        <option value="normal">Professional</option>
+        <option value="beginner">Simple / Beginner</option>
+      </select>
+    </label>
+    <label>Model
+      <select id="model"><option value="{{ default_model }}">{{ default_model }}</option></select>
+    </label>
+  </div>
+
+  <button id="analyzeBtn" class="primary big">Analyze Resume →</button>
+</section>
+
+<section class="panel result-panel">
+  <div class="panel-head">
+    <div>
+      <h2>AI Analysis</h2>
+      <p id="meta">Ready for analysis</p>
+    </div>
+    <div class="actions">
+      <button id="copyBtn" class="ghost" disabled>Copy</button>
+      <button id="downloadBtn" class="ghost" disabled>Download</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading hidden">
+    <div class="spinner"></div>
+    <div><strong>Analyzing resume…</strong><p>AI is generating your review.</p></div>
+  </div>
+
+  <article id="result" class="result">
+    <div class="empty">
+      <div class="empty-icon">✦</div>
+      <h3>Your resume analysis will appear here</h3>
+      <p>Upload/paste your resume and choose an analysis mode.</p>
+    </div>
+  </article>
+</section>
+</main>
+
+<section class="history-wrap">
+  <div class="history-head">
+    <div><h2>Recent Analyses</h2><p>Saved locally in your browser.</p></div>
+    <button id="clearHistory" class="ghost">Clear History</button>
+  </div>
+  <div id="history" class="history-grid"></div>
+</section>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
