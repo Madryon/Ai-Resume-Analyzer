@@ -16,18 +16,6 @@ DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
-def ask_openai(prompt: str, system_prompt: str = "You are a helpful assistant."):
-    if not openai_client:
-        return "OpenAI API key not configured."
-
-    response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",  # Fast and cost-effective
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content
 def extract_text(file):
     if not file or not file.filename:
         return ""
@@ -56,12 +44,11 @@ def extract_text(file):
     raise ValueError("Unsupported file type. Use PDF, DOCX, or TXT.")
 
 
-def call_gemini(model, resume, job, mode, level):
+def call_ai(model, resume, job, mode, level):
     audience = (
         "Use simple language suitable for a college student."
         if level == "beginner"
-        else
-        "Use professional language suitable for a job applicant."
+        else "Use professional language suitable for a job applicant."
     )
 
     tasks = {
@@ -75,30 +62,25 @@ def call_gemini(model, resume, job, mode, level):
 7. Specific improvement suggestions
 8. Formatting/content problems
 9. A prioritized action plan""",
-
         "ats": """Focus on ATS compatibility. Give an ATS score out of 100.
 Check section structure, keyword relevance, measurable achievements,
 clarity, formatting risks, and job-description alignment.""",
-
         "keywords": """Compare the resume with the job description.
 List matched keywords, missing keywords, related keywords, and skills
 that should be added only if the candidate genuinely has them.
 Do not encourage lying or inventing experience.""",
-
         "improve": """Identify weak resume statements and improve them.
 For each useful improvement, show:
 BEFORE:
 AFTER:
 REASON:
 Do not invent achievements, numbers, employers, degrees, or skills.""",
-
         "rewrite": """Create an improved version of the resume using only
 information already present in the supplied resume. Improve wording,
 structure, clarity, and impact without inventing facts.""",
-
         "jobmatch": """Evaluate how well the resume matches the supplied job
 description. Give a match score out of 100, explain the strongest matches,
-the biggest gaps, and the highest-priority changes."""
+the biggest gaps, and the highest-priority changes.""",
     }
 
     task = tasks.get(mode, tasks["full"])
@@ -131,18 +113,39 @@ JOB DESCRIPTION:
 ----------------
 """
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
+    # --- ROUTING LOGIC ---
+
+    # 1. Handle OpenAI Models (e.g., gpt-4o-mini, gpt-4o)
+    if model.startswith("gpt-") or "openai" in model:
+        if not openai_client:
+            return "Error: OPENAI_API_KEY is not configured in Render Environment.", None
+
+        response = openai_client.chat.completions.create(
+            model=model,
             temperature=0.2,
-            max_output_tokens=10000,
-        ),
-    )
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        text_output = response.choices[0].message.content or ""
+        return text_output, response
 
-    return response.text or "", response
+    # 2. Handle Google Gemini Models
+    else:
+        if not client:
+            return "Error: GEMINI_API_KEY is not configured in Render Environment.", None
 
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                temperature=0.2,
+                max_output_tokens=10000,
+            ),
+        )
+        return response.text or "", response
 
 @app.route("/")
 def index():
