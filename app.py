@@ -6,14 +6,28 @@ import os
 from pathlib import Path
 from google import genai
 from google.genai import types
+from openai import OpenAI
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
+def ask_openai(prompt: str, system_prompt: str = "You are a helpful assistant."):
+    if not openai_client:
+        return "OpenAI API key not configured."
 
+    response = openai_client.chat.completions.create(
+        model="gpt-4o-mini",  # Fast and cost-effective
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.choices[0].message.content
 def extract_text(file):
     if not file or not file.filename:
         return ""
