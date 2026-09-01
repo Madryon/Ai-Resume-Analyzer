@@ -137,7 +137,7 @@ JOB DESCRIPTION:
         config=types.GenerateContentConfig(
             system_instruction=system,
             temperature=0.2,
-            max_output_tokens=2000,
+            max_output_tokens=10000,
         ),
     )
 
