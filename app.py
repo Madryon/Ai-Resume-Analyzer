@@ -1,9 +1,10 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-from flask import Flask, render_template, request, jsonify
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from flask import Flask, jsonify, render_template, request
 from google import genai
 from google.genai import types
 from openai import OpenAI
@@ -11,10 +12,14 @@ from openai import OpenAI
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Safe client initialization
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+
 openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+
 
 def extract_text(file):
     if not file or not file.filename:
@@ -28,6 +33,7 @@ def extract_text(file):
     if ext == ".pdf":
         try:
             from pypdf import PdfReader
+
             reader = PdfReader(file)
             return "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception as e:
@@ -36,6 +42,7 @@ def extract_text(file):
     if ext == ".docx":
         try:
             from docx import Document
+
             doc = Document(file)
             return "\n".join(p.text for p in doc.paragraphs)
         except Exception as e:
@@ -113,12 +120,12 @@ JOB DESCRIPTION:
 ----------------
 """
 
-    # --- ROUTING LOGIC ---
-
-    # 1. Handle OpenAI Models (e.g., gpt-4o-mini, gpt-4o)
+    # 1. Route to OpenAI Models
     if model.startswith("gpt-") or "openai" in model:
         if not openai_client:
-            return "Error: OPENAI_API_KEY is not configured in Render Environment.", None
+            raise ValueError(
+                "OPENAI_API_KEY is not configured in environment variables."
+            )
 
         response = openai_client.chat.completions.create(
             model=model,
@@ -131,10 +138,12 @@ JOB DESCRIPTION:
         text_output = response.choices[0].message.content or ""
         return text_output, response
 
-    # 2. Handle Google Gemini Models
+    # 2. Route to Google Gemini Models
     else:
         if not client:
-            return "Error: GEMINI_API_KEY is not configured in Render Environment.", None
+            raise ValueError(
+                "GEMINI_API_KEY is not configured in environment variables."
+            )
 
         response = client.models.generate_content(
             model=model,
@@ -147,6 +156,7 @@ JOB DESCRIPTION:
         )
         return response.text or "", response
 
+
 @app.route("/")
 def index():
     return render_template("index.html", default_model=DEFAULT_MODEL)
@@ -154,9 +164,22 @@ def index():
 
 @app.get("/api/health")
 def health():
-    if not os.getenv("GEMINI_API_KEY"):
-        return jsonify({"ok": False, "error": "GEMINI_API_KEY not set", "models": []}), 503
-    return jsonify({"ok": True, "models": [DEFAULT_MODEL]})
+    gemini_ready = bool(os.getenv("GEMINI_API_KEY"))
+    openai_ready = bool(os.getenv("OPENAI_API_KEY"))
+
+    if not gemini_ready and not openai_ready:
+        return (
+            jsonify(
+                {"ok": False, "error": "No API keys configured", "models": []}
+            ),
+            503,
+        )
+
+    available_models = [DEFAULT_MODEL]
+    if openai_ready:
+        available_models.append("gpt-4o-mini")
+
+    return jsonify({"ok": True, "models": available_models})
 
 
 @app.post("/api/analyze")
@@ -173,32 +196,57 @@ def analyze():
             resume = extract_text(uploaded).strip()
 
         if not resume:
-            return jsonify({"error": "Paste your resume or upload a PDF, DOCX, or TXT file."}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Paste your resume or upload a PDF, DOCX, or TXT file."
+                    }
+                ),
+                400,
+            )
 
         if len(resume) < 80:
-            return jsonify({"error": "The resume text is too short to analyze."}), 400
+            return (
+                jsonify(
+                    {"error": "The resume text is too short to analyze."}
+                ),
+                400,
+            )
 
         answer, raw = call_ai(model, resume, job, mode, level)
 
-        usage = getattr(raw, "usage_metadata", None)
-        input_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
-        output_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
+        input_tokens = 0
+        output_tokens = 0
 
-        return jsonify({
-            "answer": answer,
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens
-        })
+        if raw:
+            # Check Gemini usage metadata
+            if hasattr(raw, "usage_metadata") and raw.usage_metadata:
+                input_tokens = getattr(
+                    raw.usage_metadata, "prompt_token_count", 0
+                )
+                output_tokens = getattr(
+                    raw.usage_metadata, "candidates_token_count", 0
+                )
+            # Check OpenAI usage metadata
+            elif hasattr(raw, "usage") and raw.usage:
+                input_tokens = getattr(raw.usage, "prompt_tokens", 0)
+                output_tokens = getattr(raw.usage, "completion_tokens", 0)
+
+        return jsonify(
+            {
+                "answer": answer,
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+            }
+        )
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        # google-genai raises provider-specific errors (rate limits, auth,
-        # bad model name, etc.) that don't have a single stable base class
-        # across SDK versions, so we surface the message directly here.
-        return jsonify({"error": f"Gemini API error: {e}"}), 502
+        return jsonify({"error": f"AI API error: {e}"}), 502
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
