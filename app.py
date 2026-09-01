@@ -178,7 +178,7 @@ def analyze():
         if len(resume) < 80:
             return jsonify({"error": "The resume text is too short to analyze."}), 400
 
-        answer, raw = call_gemini(model, resume, job, mode, level)
+        answer, raw = call_ai(model, resume, job, mode, level)
 
         usage = getattr(raw, "usage_metadata", None)
         input_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
