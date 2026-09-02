@@ -1,4 +1,4 @@
-__pycache__/
+x__pycache__/
 *.py[cod]
 *.pyo
 .venv/
@@ -10,6 +10,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
-.env
+.env.example
 venv/
 __pycache__/
